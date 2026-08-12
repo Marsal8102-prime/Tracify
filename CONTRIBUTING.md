@@ -1,4 +1,4 @@
-# Contributing to SmartFace
+# Contributing to Tracify
 
 ## Git Workflow
 
