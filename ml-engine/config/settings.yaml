@@ -1,0 +1,124 @@
+# ================================================
+# Tracify ML Engine — Default Configuration
+# ================================================
+# All thresholds, paths, and parameters in one place.
+# Override any value via environment variables (see .env.example).
+# ================================================
+
+# ---- Camera / Frame Source ----
+camera:
+  # Source type: "usb" | "rtsp" | "file"
+  type: "usb"
+  # USB device index (int), RTSP URL (str), or video file path (str)
+  source: 0
+  # Capture resolution (requested from camera, may not be honored)
+  width: 1280
+  height: 720
+  # Target FPS for processing (frames are skipped to match this rate)
+  fps: 15
+  # RTSP-specific: seconds before reconnect attempt on stream drop
+  reconnect_delay: 2.0
+  # RTSP-specific: max consecutive reconnect attempts (0 = unlimited)
+  max_reconnect_attempts: 10
+
+# ---- Preprocessing ----
+preprocessing:
+  # Resize frames so the longest edge <= this value (pixels)
+  # Smaller = faster detection, larger = better accuracy on small faces
+  max_dimension: 640
+  # Apply histogram equalization for low-light enhancement
+  equalize_histogram: false
+
+# ---- Face Detection (SCRFD) ----
+detection:
+  # Which detector backend to use: "scrfd"
+  backend: "scrfd"
+  # Model name (InsightFace model zoo) or path to .onnx file
+  model_name: "buffalo_l"
+  # Minimum confidence score to keep a detection (0.0 - 1.0)
+  confidence_threshold: 0.5
+  # Non-Maximum Suppression IoU threshold
+  nms_threshold: 0.4
+  # Max faces per frame (0 = unlimited)
+  max_faces: 0
+  # Input size for the detector model [width, height]
+  input_size: [640, 640]
+
+# ---- Face Alignment ----
+alignment:
+  # Output face crop size after alignment [width, height]
+  output_size: [112, 112]
+  # Landmark type: "2d" (5-point) or "3d" (68-point)
+  landmark_type: "2d"
+
+# ---- Face Embedding (ArcFace) ----
+embedding:
+  # Which embedding backend to use: "arcface"
+  backend: "arcface"
+  # Model name or path
+  model_name: "buffalo_l"
+  # Embedding vector dimensionality (ArcFace default = 512)
+  dimension: 512
+  # ONNX Runtime execution provider: "cpu" or "gpu"
+  provider: "cpu"
+
+# ---- Face Recognition / Matching ----
+recognition:
+  # Which matching strategy: "cosine" | "euclidean"
+  strategy: "cosine"
+  # Similarity threshold to classify as "known" (for cosine: 0.0 - 1.0)
+  similarity_threshold: 0.6
+  # If a face matches multiple people above threshold, use top-1
+  top_k: 1
+
+# ---- Registration (Phase 4) ----
+registration:
+  # Minimum number of face samples required for a valid registration
+  minimum_samples: 3
+  # Maximum number of face samples per registration
+  maximum_samples: 10
+  # Minimum face bounding-box size (pixels, min of width/height)
+  minimum_face_size: 80
+  # Cosine similarity threshold for duplicate identity detection
+  # Intentionally stricter than recognition threshold to reduce
+  # false-positive duplicates. Must be calibrated with real data.
+  duplicate_threshold: 0.7
+  # Enable / disable face quality checks during registration
+  quality_checks_enabled: true
+
+# ---- Attendance ----
+attendance:
+  # Minimum seconds between two check-ins for the same person
+  cooldown_seconds: 300
+  # Timezone for timestamps
+  timezone: "Asia/Kolkata"
+
+# ---- Alerts ----
+alerts:
+  # Enable alerting for unknown faces
+  enabled: true
+  # Minimum consecutive frames an unknown face must appear before alert
+  min_frames: 5
+  # Cooldown between alerts for the same unknown face (seconds)
+  cooldown_seconds: 60
+
+# ---- Storage Paths ----
+storage:
+  # Root directory for all persistent storage (relative to ml-engine/)
+  embeddings_dir: "storage/embeddings"
+  known_faces_dir: "storage/known_faces"
+  unknown_faces_dir: "storage/unknown_faces"
+  models_dir: "models"
+
+# ---- Logging ----
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+  # Log format: "json" (structured, for production) or "text" (human-readable)
+  format: "text"
+  # Directory for log files (relative to ml-engine/)
+  log_dir: "logs"
+  # Max log file size in MB before rotation
+  max_file_size_mb: 50
+  # Number of rotated log files to keep
+  backup_count: 5

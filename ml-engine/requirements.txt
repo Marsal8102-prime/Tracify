@@ -1,0 +1,25 @@
+# ================================================
+# Tracify ML Engine — Production Dependencies
+# ================================================
+
+# Core
+numpy>=1.24,<2.0
+opencv-python-headless>=4.9
+Pillow>=10.0
+
+# Face Detection & Embedding (ONNX-based)
+insightface>=0.7.3
+onnxruntime>=1.17
+
+# Configuration
+PyYAML>=6.0
+python-dotenv>=1.0
+
+# API (Phase 5 — uncomment when needed)
+# fastapi>=0.110
+# uvicorn[standard]>=0.29
+# pydantic>=2.0
+
+# Database (Phase 4 — uncomment when needed)
+# sqlalchemy>=2.0
+# psycopg2-binary>=2.9

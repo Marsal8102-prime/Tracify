@@ -1,0 +1,104 @@
+# ========================
+# Python
+# ========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+eggs/
+*.whl
+
+# ========================
+# Virtual Environments
+# ========================
+venv/
+.venv/
+env/
+.env
+
+# ========================
+# IDE / Editor
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ========================
+# OS Files
+# ========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ========================
+# ML Models (large binaries)
+# ========================
+ml-engine/models/*.onnx
+ml-engine/models/*.pth
+ml-engine/models/*.pt
+ml-engine/models/*.bin
+ml-engine/models/*.pkl
+
+# ========================
+# InsightFace cache
+# ========================
+.insightface/
+
+# ========================
+# Storage (runtime data)
+# ========================
+ml-engine/storage/embeddings/*.npy
+ml-engine/storage/embeddings/*.npz
+ml-engine/storage/embeddings/*.json
+ml-engine/storage/known_faces/*
+ml-engine/storage/unknown_faces/*
+!ml-engine/storage/**/.gitkeep
+
+# ========================
+# Logs
+# ========================
+ml-engine/logs/*.log
+ml-engine/logs/*.jsonl
+logs/
+
+# ========================
+# Data (large datasets)
+# ========================
+data/raw/*
+data/processed/*
+!data/sample/
+!data/**/.gitkeep
+
+# ========================
+# Environment & Secrets
+# ========================
+.env
+.env.local
+.env.production
+
+# ========================
+# Docker
+# ========================
+*.log
+
+# ========================
+# Testing & Coverage
+# ========================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ========================
+# Jupyter (if used)
+# ========================
+.ipynb_checkpoints/
