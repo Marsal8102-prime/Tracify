@@ -15,10 +15,11 @@ onnxruntime>=1.17
 PyYAML>=6.0
 python-dotenv>=1.0
 
-# API (Phase 5 — uncomment when needed)
-# fastapi>=0.110
-# uvicorn[standard]>=0.29
-# pydantic>=2.0
+# API
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.0
+python-multipart>=0.0.9
 
 # Database (Phase 4 — uncomment when needed)
 # sqlalchemy>=2.0
