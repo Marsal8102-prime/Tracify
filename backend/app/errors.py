@@ -13,6 +13,8 @@ class ErrorCode(str, Enum):
     SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
     VALIDATION_ERROR = "VALIDATION_ERROR"
     INTERNAL_ERROR = "INTERNAL_ERROR"
+    NOT_FOUND = "NOT_FOUND"
+    CONFLICT = "CONFLICT"
 
 
 class BackendError(Exception):
@@ -97,6 +99,18 @@ def install_exception_handlers(app: FastAPI) -> None:
             422,
             ErrorCode.VALIDATION_ERROR,
             "The request data is invalid.",
+            request,
+        )
+
+    @app.exception_handler(DatabaseUnavailableError)
+    async def database_unavailable_error_handler(
+        request: Request,
+        _exc: DatabaseUnavailableError,
+    ) -> JSONResponse:
+        return _response(
+            503,
+            ErrorCode.SERVICE_UNAVAILABLE,
+            "The database is temporarily unavailable.",
             request,
         )
 

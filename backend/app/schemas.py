@@ -1,4 +1,6 @@
-from typing import Literal
+import uuid
+from datetime import datetime
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -103,3 +105,31 @@ class MLDownstreamErrorDetail(StrictModel):
 
 class MLDownstreamErrorResponse(StrictModel):
     error: MLDownstreamErrorDetail
+
+
+class PersonCreate(StrictModel):
+    person_id: str = Field(min_length=1, max_length=128)
+    display_name: str = Field(min_length=1, max_length=200)
+    department: str | None = Field(default=None, min_length=1, max_length=120)
+    designation: str | None = Field(default=None, min_length=1, max_length=120)
+    profile_metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class PersonUpdate(StrictModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=200)
+    department: str | None = Field(default=None, min_length=1, max_length=120)
+    designation: str | None = Field(default=None, min_length=1, max_length=120)
+    status: Literal["active", "inactive", "archived"] | None = None
+    profile_metadata: dict[str, Any] | None = None
+
+
+class PersonResponse(StrictModel):
+    id: uuid.UUID
+    person_id: str
+    display_name: str
+    department: str | None
+    designation: str | None
+    status: Literal["active", "inactive", "archived"]
+    profile_metadata: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
