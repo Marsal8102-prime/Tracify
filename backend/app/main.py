@@ -18,6 +18,7 @@ from backend.app.database import (
 from backend.app.errors import install_exception_handlers
 from backend.app.middleware import RequestIDMiddleware
 from backend.app.routes.health import router as health_router
+from backend.app.routes.persons import router as persons_router
 from backend.app.version import VERSION
 
 
@@ -98,6 +99,7 @@ def create_app(
     application.add_middleware(RequestIDMiddleware)
     install_exception_handlers(application)
     application.include_router(health_router)
+    application.include_router(persons_router, prefix="/api")
     return application
 
 
