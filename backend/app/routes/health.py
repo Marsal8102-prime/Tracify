@@ -1,8 +1,13 @@
 from fastapi import APIRouter, Depends, Request
 
 from backend.app.clients.ml_engine import MLEngineClient
-from backend.app.dependencies import get_ml_engine_client
-from backend.app.errors import MLEngineError, ServiceUnavailableError
+from backend.app.database import DatabaseHealthCheck
+from backend.app.dependencies import get_database_health_checker, get_ml_engine_client
+from backend.app.errors import (
+    DatabaseUnavailableError,
+    MLEngineError,
+    ServiceUnavailableError,
+)
 from backend.app.schemas import ErrorResponse, LivenessResponse, ReadinessResponse
 from backend.app.version import VERSION
 
@@ -31,9 +36,14 @@ async def live() -> LivenessResponse:
 async def ready(
     request: Request,
     ml_client: MLEngineClient = Depends(get_ml_engine_client),
+    database_health: DatabaseHealthCheck = Depends(get_database_health_checker),
 ) -> ReadinessResponse:
     try:
         await ml_client.health(request_id=request.state.request_id)
     except MLEngineError as exc:
+        raise ServiceUnavailableError() from exc
+    try:
+        await database_health.check()
+    except DatabaseUnavailableError as exc:
         raise ServiceUnavailableError() from exc
     return ReadinessResponse(status="ready", version=VERSION)

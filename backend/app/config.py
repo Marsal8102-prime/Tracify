@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Any
 
-from pydantic import AnyHttpUrl, Field, field_validator
+from pydantic import AnyHttpUrl, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -47,6 +47,32 @@ class Settings(BaseSettings):
         validation_alias="ML_ENGINE_HEALTH_TIMEOUT_SECONDS",
     )
 
+    # ---- Database ----
+    database_url: SecretStr = Field(
+        default="postgresql+asyncpg://tracify:change-me@127.0.0.1:5432/tracify",
+        validation_alias="DATABASE_URL",
+    )
+    database_pool_size: int = Field(
+        default=5,
+        gt=0,
+        validation_alias="DATABASE_POOL_SIZE",
+    )
+    database_max_overflow: int = Field(
+        default=10,
+        ge=0,
+        validation_alias="DATABASE_MAX_OVERFLOW",
+    )
+    database_pool_timeout_seconds: float = Field(
+        default=30.0,
+        gt=0,
+        validation_alias="DATABASE_POOL_TIMEOUT_SECONDS",
+    )
+    database_health_timeout_seconds: float = Field(
+        default=3.0,
+        gt=0,
+        validation_alias="DATABASE_HEALTH_TIMEOUT_SECONDS",
+    )
+
     @field_validator("ml_engine_url", mode="before")
     @classmethod
     def validate_ml_engine_url(cls, value: Any) -> Any:
@@ -64,6 +90,23 @@ class Settings(BaseSettings):
             raise ValueError("ML engine URL must not contain query parameters or fragments.")
         if value.path not in (None, "", "/"):
             raise ValueError("ML engine URL must not contain a non-root path.")
+        return value
+
+    @field_validator("database_url")
+    @classmethod
+    def validate_database_url(cls, value: SecretStr) -> SecretStr:
+        raw = value.get_secret_value()
+        if not raw.startswith("postgresql+asyncpg://"):
+            raise ValueError(
+                "DATABASE_URL must use the postgresql+asyncpg:// driver."
+            )
+        # Require a database name after the last /
+        after_scheme = raw.split("://", 1)[1]
+        path_part = after_scheme.rsplit("/", 1)
+        if len(path_part) < 2 or not path_part[1].split("?")[0]:
+            raise ValueError(
+                "DATABASE_URL must include a database name."
+            )
         return value
 
     @property
