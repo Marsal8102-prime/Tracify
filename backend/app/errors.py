@@ -59,6 +59,13 @@ class MLEngineDownstreamError(MLEngineError):
         self.downstream_code = downstream_code
 
 
+class DatabaseUnavailableError(Exception):
+    """Known, sanitized database availability failure.
+
+    Stores no raw SQL, URL, hostname, or driver detail.
+    """
+
+
 def _request_id(request: Request) -> str:
     return getattr(request.state, "request_id", "unknown")
 

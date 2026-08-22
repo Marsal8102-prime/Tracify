@@ -1,7 +1,13 @@
 import httpx
 import pytest
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from backend.app.config import Settings
+from backend.app.database import DatabaseHealthCheck
 from backend.app.main import create_app
 
 
@@ -14,10 +20,20 @@ ML_ENGINE_ENV_VARS = (
     "ML_ENGINE_HEALTH_TIMEOUT_SECONDS",
 )
 
+DATABASE_ENV_VARS = (
+    "DATABASE_URL",
+    "DATABASE_POOL_SIZE",
+    "DATABASE_MAX_OVERFLOW",
+    "DATABASE_POOL_TIMEOUT_SECONDS",
+    "DATABASE_HEALTH_TIMEOUT_SECONDS",
+)
+
 
 @pytest.fixture(autouse=True)
-def isolate_ml_engine_environment(monkeypatch):
+def isolate_environment(monkeypatch):
     for name in ML_ENGINE_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+    for name in DATABASE_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
 
 
@@ -31,6 +47,13 @@ def healthy_payload() -> dict[str, object]:
     }
 
 
+class PassingHealthCheck:
+    """A database health checker that always passes."""
+
+    async def check(self) -> None:
+        pass
+
+
 @pytest.fixture
 def settings() -> Settings:
     return Settings(_env_file=None)
@@ -41,6 +64,21 @@ def healthy_transport() -> httpx.MockTransport:
     return httpx.MockTransport(lambda _request: httpx.Response(200, json=healthy_payload()))
 
 
+def _noop_engine_factory(settings):
+    """Return a lightweight SQLite engine (never contacts PostgreSQL)."""
+    return create_async_engine("sqlite+aiosqlite://", echo=False)
+
+
+def _noop_session_factory(engine):
+    """Return a session factory bound to the given engine."""
+    return async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+
+def _noop_health_factory(engine, settings):
+    """Return a health checker that always passes."""
+    return PassingHealthCheck()
+
+
 @pytest.fixture
 def app(settings: Settings, healthy_transport: httpx.MockTransport):
     return create_app(
@@ -49,6 +87,9 @@ def app(settings: Settings, healthy_transport: httpx.MockTransport):
             base_url=config.ml_engine_base_url,
             transport=healthy_transport,
         ),
+        database_engine_factory=_noop_engine_factory,
+        database_session_factory=_noop_session_factory,
+        database_health_factory=_noop_health_factory,
     )
 
 
