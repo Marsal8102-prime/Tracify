@@ -1,15 +1,16 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.dependencies import get_database_session
+from backend.app.clients.ml_engine import MLEngineClient, UploadPart
+from backend.app.dependencies import get_database_session, get_ml_engine_client
 from backend.app.errors import BackendError, DatabaseUnavailableError, ErrorCode
 from backend.app.models.person import Person
-from backend.app.schemas import PersonCreate, PersonResponse, PersonUpdate
+from backend.app.schemas import MLRegistrationResponse, PersonCreate, PersonResponse, PersonUpdate
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/persons", tags=["persons"])
@@ -140,3 +141,75 @@ async def update_person(
 
     await session.refresh(person)
     return person
+
+
+@router.post(
+    "/{person_id}/register",
+    response_model=MLRegistrationResponse,
+)
+async def register_person_faces(
+    person_id: str,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_database_session)],
+    ml_client: Annotated[MLEngineClient, Depends(get_ml_engine_client)],
+    images: list[UploadFile] = File(...),
+):
+    if not images:
+        raise BackendError(
+            ErrorCode.VALIDATION_ERROR,
+            "At least one image is required.",
+            400,
+        )
+    if len(images) > 5:
+        raise BackendError(
+            ErrorCode.VALIDATION_ERROR,
+            "Too many images. Maximum 5 images allowed per request.",
+            400,
+        )
+
+    try:
+        result = await session.execute(select(Person).where(Person.person_id == person_id))
+        person = result.scalar_one_or_none()
+    except OperationalError as e:
+        raise DatabaseUnavailableError() from e
+
+    if not person:
+        raise BackendError(
+            ErrorCode.NOT_FOUND,
+            "Person not found.",
+            404,
+        )
+
+    upload_parts: list[UploadPart] = []
+    for image in images:
+        if image.content_type not in ("image/jpeg", "image/png"):
+            raise BackendError(
+                ErrorCode.VALIDATION_ERROR,
+                f"Unsupported image type '{image.content_type}'. Only image/jpeg and image/png are allowed.",
+                400,
+            )
+        content = await image.read()
+        if len(content) > 10 * 1024 * 1024:  # 10MB limit per image
+            raise BackendError(
+                ErrorCode.VALIDATION_ERROR,
+                f"Image '{image.filename}' exceeds the 10MB limit.",
+                400,
+            )
+        upload_parts.append(
+            UploadPart(
+                filename=image.filename or "unknown",
+                content=content,
+                content_type=image.content_type,  # type: ignore[arg-type]
+            )
+        )
+
+    # Use the request_id from the RequestState (middleware)
+    request_id = getattr(request.state, "request_id", "unknown")
+
+    return await ml_client.register_faces(
+        person_id=person.person_id,
+        display_name=person.display_name,
+        images=upload_parts,
+        metadata={"source": "backend_api"},
+        request_id=request_id,
+    )

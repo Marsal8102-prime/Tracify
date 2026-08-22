@@ -15,6 +15,7 @@ class ErrorCode(str, Enum):
     INTERNAL_ERROR = "INTERNAL_ERROR"
     NOT_FOUND = "NOT_FOUND"
     CONFLICT = "CONFLICT"
+    ML_DOWNSTREAM_ERROR = "ML_DOWNSTREAM_ERROR"
 
 
 class BackendError(Exception):
@@ -111,6 +112,45 @@ def install_exception_handlers(app: FastAPI) -> None:
             503,
             ErrorCode.SERVICE_UNAVAILABLE,
             "The database is temporarily unavailable.",
+            request,
+        )
+
+    @app.exception_handler(MLEngineUnavailableError)
+    @app.exception_handler(MLEngineConnectionError)
+    @app.exception_handler(MLEngineTimeoutError)
+    async def ml_engine_unavailable_error_handler(
+        request: Request,
+        _exc: MLEngineError,
+    ) -> JSONResponse:
+        return _response(
+            503,
+            ErrorCode.SERVICE_UNAVAILABLE,
+            "The ML service is temporarily unavailable.",
+            request,
+        )
+
+    @app.exception_handler(MLEngineProtocolError)
+    async def ml_engine_protocol_error_handler(
+        request: Request,
+        _exc: MLEngineProtocolError,
+    ) -> JSONResponse:
+        logger.error("ML Engine protocol error")
+        return _response(
+            500,
+            ErrorCode.INTERNAL_ERROR,
+            "An internal error occurred while communicating with the ML service.",
+            request,
+        )
+
+    @app.exception_handler(MLEngineDownstreamError)
+    async def ml_engine_downstream_error_handler(
+        request: Request,
+        exc: MLEngineDownstreamError,
+    ) -> JSONResponse:
+        return _response(
+            exc.status_code,
+            ErrorCode.ML_DOWNSTREAM_ERROR,
+            f"The ML service rejected the request: {exc.downstream_code}",
             request,
         )
 
