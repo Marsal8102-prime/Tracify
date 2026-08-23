@@ -52,15 +52,17 @@ def test_exactly_one_head():
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
     assert len(heads) == 1
-    assert heads[0] == "0001"
+    assert heads[0] == "0002"
 
 
-def test_exactly_one_revision():
+def test_exactly_two_revisions():
     cfg = _make_alembic_config("sqlite:///unused")
     from alembic.script import ScriptDirectory
     script = ScriptDirectory.from_config(cfg)
     revisions = list(script.walk_revisions())
-    assert len(revisions) == 1
+    assert len(revisions) == 2
+    rev_ids = {rev.revision for rev in revisions}
+    assert rev_ids == {"0001", "0002"}
 
 
 def test_revision_parent_is_none():
