@@ -100,7 +100,7 @@ def initialize_runtime(settings: Optional[Settings] = None, lock: Optional[async
             ready=True
         )
     except Exception:
-        logger.error("Failed to initialize ML runtime")
+        logger.error("Failed to initialize ML runtime", exc_info=True)
         # Build an empty/dummy runtime with ready=False
         return MLRuntime(
             settings=settings,

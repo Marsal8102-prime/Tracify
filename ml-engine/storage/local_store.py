@@ -3,11 +3,11 @@ Storage — Local filesystem embedding storage backend.
 
 Stores each embedding as a .npz file (numpy compressed archive)
 containing the embedding vector and metadata. Files are named using
-a sanitized version of the person_id.
+a sanitized version of the storage_key (if provided) or person_id.
 
 File structure:
     storage/embeddings/
-        <person_id>.npz
+        <storage_key_or_person_id>.npz
             - "embedding": np.ndarray shape (dim,)
             - "person_id": str
             - "metadata_keys": list of metadata key names
@@ -85,7 +85,11 @@ class LocalEmbeddingStore(EmbeddingStore):
         # Validate
         self._validate_record(record)
 
-        filepath = self._id_to_path(record.person_id)
+        # Use storage_key for the filename when provided (multi-embedding),
+        # otherwise fall back to person_id. The .npz always stores the
+        # canonical person_id regardless of the filename used.
+        file_key = record.storage_key if record.storage_key else record.person_id
+        filepath = self._id_to_path(file_key)
 
         # Serialize metadata as parallel arrays (npz doesn't store dicts natively)
         meta_keys = list(record.metadata.keys()) if record.metadata else []

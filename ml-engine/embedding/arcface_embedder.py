@@ -68,10 +68,10 @@ class ArcFaceEmbedder(BaseEmbedder):
 
         _logger.info(f"Loading ArcFace model from pack: {self._model_name}")
 
-        # Load only the recognition module (not detection)
+        # Load detection + recognition; InsightFace asserts detection is present
         app = FaceAnalysis(
             name=self._model_name,
-            allowed_modules=["recognition"],
+            allowed_modules=["detection", "recognition"],
         )
 
         # ctx_id: 0 = GPU, -1 = CPU

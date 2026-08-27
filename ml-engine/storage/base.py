@@ -26,15 +26,21 @@ class EmbeddingRecord:
     A stored face embedding with associated metadata.
 
     Attributes:
-        person_id: Unique identifier for the person (e.g., employee ID, UUID).
+        person_id: Canonical business identifier for the person (e.g., employee ID, UUID).
+            This is always the real person identity — never a storage-internal key.
         embedding: The L2-normalized face embedding vector.
         metadata: Additional information (model version, capture date, etc.).
         created_at: ISO-8601 timestamp of when the record was created.
+        storage_key: Optional unique key for persistence (filename, DB row key).
+            When a person has multiple embeddings, each must have a distinct
+            storage_key while sharing the same person_id. If None, the storage
+            backend falls back to person_id for the key.
     """
     person_id: str
     embedding: np.ndarray
     metadata: Dict[str, str] = field(default_factory=dict)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    storage_key: Optional[str] = None
 
 
 class EmbeddingStore(ABC):
