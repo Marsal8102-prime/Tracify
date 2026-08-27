@@ -547,10 +547,11 @@ class TestIdentityValidation:
 
     def test_duplicate_person_id(self, service, store, face_images):
         """Registering with an already-used person_id should be invalid."""
-        # Pre-store an embedding with this person_id prefix
+        # Pre-store an embedding with this person_id (canonical)
         store.save(EmbeddingRecord(
-            person_id="existing__emb_0",
+            person_id="existing",
             embedding=_make_embedding(seed=999),
+            storage_key="existing__emb_0",
         ))
         result = service.register("existing", "Name", face_images)
         assert result.status is RegistrationStatus.INVALID
@@ -727,8 +728,9 @@ class TestRegistrationDuplicate:
         # Store an existing person
         existing_emb = _make_embedding(seed=42)
         store.save(EmbeddingRecord(
-            person_id="existing__emb_0",
+            person_id="existing",
             embedding=existing_emb,
+            storage_key="existing__emb_0",
         ))
         recognizer.refresh_gallery()
 
@@ -770,13 +772,29 @@ class TestRegistrationStorage:
         assert result.status is RegistrationStatus.SUCCESS
         assert store.count() == result.accepted_count
 
-    def test_storage_uses_composite_keys(self, service, store, face_images):
-        """Stored embeddings should use person_id__emb_N keys."""
+    def test_storage_uses_composite_keys(self, service, store, face_images, tmp_path):
+        """Stored .npz files should use composite-key filenames,
+        but EmbeddingRecord.person_id inside each file should be
+        the canonical business person_id."""
         result = service.register("EMP-001", "Alice", face_images)
         assert result.status is RegistrationStatus.SUCCESS
+
+        # Verify composite-key filenames exist on disk
+        embeddings_dir = tmp_path / "embeddings"
+        npz_names = sorted(f.stem for f in embeddings_dir.glob("*.npz"))
+        for name in npz_names:
+            assert name.startswith("EMP-001__emb_")
+
+        # list_ids() reads person_id from inside the .npz — should be canonical
         ids = store.list_ids()
+        assert len(ids) == result.accepted_count
         for stored_id in ids:
-            assert stored_id.startswith("EMP-001__emb_")
+            assert stored_id == "EMP-001"
+
+        # get_all() should also carry canonical person_id
+        records = store.get_all()
+        for record in records:
+            assert record.person_id == "EMP-001"
 
     def test_storage_failure_rollback(self, store, recognizer, reg_config):
         """Storage failure should trigger rollback of any stored embeddings."""

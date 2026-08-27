@@ -19,12 +19,13 @@ Rollback safety:
     to avoid leaving the system in an inconsistent state.
 
 Multi-embedding storage strategy:
-    Each embedding is stored with a composite key:
-        {person_id}__{index}  (double underscore separator)
-    The EmbeddingRecord.person_id field retains the real person_id,
-    so the recognition engine's _build_candidates() correctly groups
-    all embeddings for the same person. The composite key only affects
-    the filename in LocalEmbeddingStore.
+    Each embedding is stored with a composite storage_key:
+        {person_id}__emb_{index}  (double underscore separator)
+    The EmbeddingRecord.person_id field always retains the canonical
+    business person_id, so the recognition engine's _build_candidates()
+    correctly groups all embeddings for the same person. The composite
+    key is passed via EmbeddingRecord.storage_key and only affects the
+    filename in LocalEmbeddingStore.
 
 Usage:
     from registration.service import RegistrationService
@@ -241,7 +242,7 @@ class RegistrationService:
             for idx, embedding in enumerate(valid_embeddings):
                 storage_key = _generate_embedding_key(person_id, idx)
                 self._store.save(EmbeddingRecord(
-                    person_id=storage_key,
+                    person_id=person_id,
                     embedding=embedding,
                     metadata={
                         "display_name": display_name,
@@ -249,6 +250,7 @@ class RegistrationService:
                         "model_version": self._embedder.__class__.__name__,
                         **metadata,
                     },
+                    storage_key=storage_key,
                 ))
                 stored_keys.append(storage_key)
 
