@@ -24,6 +24,8 @@ from api.schemas import (
     FaceResult,
     ErrorResponse,
 )
+from camera.factory import create_camera
+from camera.session import CameraSession
 
 logger = logging.getLogger("tracify.api.main")
 
@@ -53,6 +55,8 @@ def create_app(runtime_factory: Callable[..., MLRuntime] = initialize_runtime) -
             )
         yield
         # Cleanup
+        if app.state.ml_runtime and app.state.ml_runtime.camera_session:
+            app.state.ml_runtime.camera_session.stop()
         app.state.ml_runtime = None
 
     app = FastAPI(title="Tracify ML Engine Internal API", version=VERSION, lifespan=lifespan)
@@ -192,13 +196,15 @@ def create_app(runtime_factory: Callable[..., MLRuntime] = initialize_runtime) -
         # Run registration in thread with lock
         async with runtime.lock:
             try:
-                result = await asyncio.to_thread(
-                    runtime.registration_service.register,
-                    person_id=person_id,
-                    display_name=display_name,
-                    face_images=decoded_images,
-                    metadata=parsed_metadata
-                )
+                def sync_register_locked():
+                    with runtime.pipeline_lock:
+                        return runtime.registration_service.register(
+                            person_id=person_id,
+                            display_name=display_name,
+                            face_images=decoded_images,
+                            metadata=parsed_metadata
+                        )
+                result = await asyncio.to_thread(sync_register_locked)
             except Exception:
                 logger.exception("Registration processing failed")
                 raise MLAPIError(ErrorCode.ML_PROCESSING_ERROR, "An error occurred during registration processing.", 500)
@@ -284,7 +290,10 @@ def create_app(runtime_factory: Callable[..., MLRuntime] = initialize_runtime) -
 
         async with runtime.lock:
             try:
-                face_results, process_time = await asyncio.to_thread(sync_recognize)
+                def sync_recognize_locked():
+                    with runtime.pipeline_lock:
+                        return sync_recognize()
+                face_results, process_time = await asyncio.to_thread(sync_recognize_locked)
             except Exception:
                 logger.exception("Recognition processing failed")
                 raise MLAPIError(ErrorCode.ML_PROCESSING_ERROR, "An error occurred during recognition processing.", 500)
@@ -294,6 +303,58 @@ def create_app(runtime_factory: Callable[..., MLRuntime] = initialize_runtime) -
             processing_time_ms=process_time,
             faces=face_results
         )
+
+    @app.post("/internal/v1/camera/start")
+    async def camera_start(runtime: MLRuntime = Depends(require_ready_runtime)):
+        if runtime.camera_session and runtime.camera_session.is_running:
+            raise MLAPIError(ErrorCode.CAMERA_ALREADY_RUNNING, "Camera session is already running.", 409)
+
+        camera = create_camera(runtime.settings.camera)
+        session = CameraSession(
+            camera=camera,
+            preprocessor=runtime.preprocessor,
+            detector=runtime.detector,
+            aligner=runtime.aligner,
+            embedder=runtime.embedder,
+            recognizer=runtime.recognizer,
+            pipeline_lock=runtime.pipeline_lock,
+        )
+
+        try:
+            await asyncio.to_thread(session.start)
+        except Exception as e:
+            raise MLAPIError(ErrorCode.CAMERA_UNAVAILABLE, f"Failed to open camera: {str(e)}", 503)
+
+        runtime.camera_session = session
+
+        return {
+            "status": "started",
+            "camera_type": runtime.settings.camera.type,
+            "camera_source": str(runtime.settings.camera.source)
+        }
+
+    @app.post("/internal/v1/camera/stop")
+    async def camera_stop(runtime: MLRuntime = Depends(require_ready_runtime)):
+        if not runtime.camera_session:
+            return {"status": "stopped", "frames_processed": 0}
+
+        frames = runtime.camera_session.frames_processed
+        await asyncio.to_thread(runtime.camera_session.stop)
+
+        return {"status": "stopped", "frames_processed": frames}
+
+    @app.get("/internal/v1/camera/status")
+    async def camera_status(runtime: MLRuntime = Depends(require_ready_runtime)):
+        if not runtime.camera_session:
+            return {
+                "state": "stopped",
+                "frames_processed": 0,
+                "events_buffered": 0,
+                "events_produced": 0,
+                "events_dropped": 0,
+                "last_error": None
+            }
+        return runtime.camera_session.status()
 
     return app
 
