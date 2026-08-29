@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Any
 
 from alignment.base import BaseAligner
 from alignment.face_aligner import FaceAligner
@@ -30,6 +30,8 @@ class MLRuntime:
     recognizer: Optional[BaseRecognizer]
     registration_service: Optional[RegistrationService]
     lock: asyncio.Lock
+    camera_session: Optional[Any] = None
+    pipeline_lock: Optional[Any] = None
     ready: bool = False
     error: Optional[str] = None
 
@@ -37,8 +39,10 @@ def initialize_runtime(settings: Optional[Settings] = None, lock: Optional[async
     """
     Initializes the ML engine components.
     """
+    import threading
     if lock is None:
         lock = asyncio.Lock()
+    pipeline_lock = threading.Lock()
 
     try:
         if settings is None:
@@ -97,6 +101,8 @@ def initialize_runtime(settings: Optional[Settings] = None, lock: Optional[async
             recognizer=recognizer,
             registration_service=registration_service,
             lock=lock,
+            camera_session=None,
+            pipeline_lock=pipeline_lock,
             ready=True
         )
     except Exception:
@@ -112,6 +118,8 @@ def initialize_runtime(settings: Optional[Settings] = None, lock: Optional[async
             recognizer=None,
             registration_service=None,
             lock=lock,
+            camera_session=None,
+            pipeline_lock=pipeline_lock,
             ready=False,
             error="Failed to initialize ML models."
         )

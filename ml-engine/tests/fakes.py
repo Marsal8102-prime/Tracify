@@ -4,6 +4,7 @@ from typing import List, Optional
 
 from api.runtime import MLRuntime
 from alignment.base import BaseAligner
+from camera.base import BaseCamera
 from detection.base import BaseDetector, DetectionResult
 from embedding.base import BaseEmbedder
 from preprocessing.preprocessor import FramePreprocessor, PreprocessedFrame
@@ -113,9 +114,44 @@ class FakeRegistrationService:
             ]
         )
 
+class FakeCamera(BaseCamera):
+    """Deterministic camera for testing — yields a fixed frame N times."""
+
+    def __init__(self, frames: Optional[List[Optional[np.ndarray]]] = None, max_reads: int = 10):
+        self._frames = frames or [np.zeros((480, 640, 3), dtype=np.uint8)]
+        self._index = 0
+        self._max_reads = max_reads
+        self._opened = False
+        self._read_count = 0
+
+    def open(self) -> None:
+        self._opened = True
+        self._index = 0
+        self._read_count = 0
+
+    def read_frame(self) -> Optional[np.ndarray]:
+        if not self._opened or self._read_count >= self._max_reads:
+            return None
+        frame = self._frames[self._index % len(self._frames)]
+        self._index += 1
+        self._read_count += 1
+        return frame
+
+    def is_opened(self) -> bool:
+        return self._opened
+
+    def release(self) -> None:
+        self._opened = False
+
+    @property
+    def frame_size(self) -> Optional[tuple]:
+        return (640, 480) if self._opened else None
+
 def create_fake_runtime(ready: bool = True, lock: Optional[asyncio.Lock] = None) -> MLRuntime:
+    import threading
     if lock is None:
         lock = asyncio.Lock()
+    pipeline_lock = threading.Lock()
 
     return MLRuntime(
         settings=Settings(),
@@ -127,5 +163,7 @@ def create_fake_runtime(ready: bool = True, lock: Optional[asyncio.Lock] = None)
         recognizer=FakeRecognizer(),
         registration_service=FakeRegistrationService(), # type: ignore
         lock=lock,
+        camera_session=None,
+        pipeline_lock=pipeline_lock,
         ready=ready
     )

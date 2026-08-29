@@ -9,6 +9,8 @@ class ErrorCode(str, enum.Enum):
     ML_PROCESSING_ERROR = "ML_PROCESSING_ERROR"
     VALIDATION_ERROR = "VALIDATION_ERROR"
     INTERNAL_ERROR = "INTERNAL_ERROR"
+    CAMERA_ALREADY_RUNNING = "CAMERA_ALREADY_RUNNING"
+    CAMERA_UNAVAILABLE = "CAMERA_UNAVAILABLE"
 
 class MLAPIError(Exception):
     def __init__(self, code: ErrorCode, message: str, status_code: int = 400):
