@@ -35,6 +35,7 @@ class CameraSession:
         recognizer: BaseRecognizer,
         pipeline_lock: threading.Lock,
         buffer_size: int = 1000,
+        target_fps: float = 15.0,
     ) -> None:
         self._camera = camera
         self._preprocessor = preprocessor
@@ -43,6 +44,7 @@ class CameraSession:
         self._embedder = embedder
         self._recognizer = recognizer
         self._pipeline_lock = pipeline_lock
+        self._target_fps = target_fps
         
         self._event_buffer = EventBuffer(maxlen=buffer_size)
         self._state = CameraSessionState.STOPPED
@@ -174,6 +176,9 @@ class CameraSession:
         """Background thread main loop."""
         logger.info("Camera session loop started")
 
+        frame_interval = 1.0 / self._target_fps
+        next_process_time = time.monotonic()
+
         while not self._stop_event.is_set():
             try:
                 frame = self._camera.read_frame()
@@ -188,6 +193,13 @@ class CameraSession:
                     break
                 self._stop_event.wait(0.01)
                 continue
+
+            now = time.monotonic()
+            if now < next_process_time:
+                # Skip intermediate frames
+                continue
+
+            next_process_time = max(next_process_time + frame_interval, now)
 
             self._frames_processed += 1
 

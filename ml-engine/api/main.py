@@ -319,6 +319,7 @@ def create_app(runtime_factory: Callable[..., MLRuntime] = initialize_runtime) -
             embedder=runtime.embedder,
             recognizer=runtime.recognizer,
             pipeline_lock=runtime.pipeline_lock,
+            target_fps=runtime.settings.camera.fps,
         )
 
         try:
