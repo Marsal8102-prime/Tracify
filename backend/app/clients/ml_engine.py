@@ -18,12 +18,14 @@ from backend.app.schemas import (
     MLHealthResponse,
     MLRecognitionResponse,
     MLRegistrationResponse,
+    MLCameraEvent,
 )
 
 
 HEALTH_PATH = "/internal/v1/health"
 REGISTER_PATH = "/internal/v1/faces/register"
 RECOGNIZE_PATH = "/internal/v1/faces/recognize"
+CAMERA_EVENTS_PATH = "/internal/v1/camera/events"
 DOWNSTREAM_CLIENT_ERROR_STATUSES = {400, 413, 415, 422}
 DOWNSTREAM_UNAVAILABLE_STATUSES = {500, 503}
 ResponseModel = TypeVar("ResponseModel", bound=BaseModel)
@@ -99,6 +101,35 @@ class MLEngineClient:
             files={"image": (image.filename, image.content, image.content_type)},
         )
         return self._parse_operation_response(response, MLRecognitionResponse)
+
+    async def fetch_camera_events(
+        self,
+        *,
+        request_id: str,
+        limit: int = 100,
+    ) -> list[MLCameraEvent]:
+        response = await self._request(
+            "GET",
+            f"{CAMERA_EVENTS_PATH}?limit={limit}",
+            request_id=request_id,
+        )
+        if response.status_code == 200:
+            payload = self._response_json(response)
+            try:
+                # payload is expected to be a list of events
+                return [MLCameraEvent.model_validate(item, strict=True) for item in payload]
+            except ValidationError as exc:
+                raise MLEngineProtocolError("The ML service response violated its contract.") from exc
+
+        if response.status_code in (
+            DOWNSTREAM_CLIENT_ERROR_STATUSES | DOWNSTREAM_UNAVAILABLE_STATUSES
+        ):
+            if response.status_code in DOWNSTREAM_UNAVAILABLE_STATUSES:
+                raise MLEngineUnavailableError("The ML service is unavailable.")
+            error = self._validate_response(response, MLDownstreamErrorResponse)
+            raise MLEngineDownstreamError(response.status_code, error.error.code)
+
+        raise MLEngineProtocolError("The ML service returned an unexpected status.")
 
     async def _request(
         self,

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import logging
+import uuid
 from collections.abc import Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 
@@ -20,7 +23,10 @@ from backend.app.middleware import RequestIDMiddleware
 from backend.app.routes.health import router as health_router
 from backend.app.routes.persons import router as persons_router
 from backend.app.routes.recognition import router as recognition_router
+from backend.app.services.recognition import RecognitionService
 from backend.app.version import VERSION
+
+logger = logging.getLogger(__name__)
 
 
 SettingsFactory = Callable[[], Settings]
@@ -61,6 +67,7 @@ def create_app(
         app.state.database_engine = None
         app.state.database_session_factory = None
         app.state.database_health_checker = None
+        polling_task = None
 
         async with AsyncExitStack() as stack:
             try:
@@ -85,8 +92,41 @@ def create_app(
                 app.state.database_session_factory = session_factory
                 app.state.database_health_checker = health_checker
 
+                async def _poll_camera_events_loop() -> None:
+                    while True:
+                        try:
+                            await asyncio.sleep(1.0)
+                            ml_client = app.state.ml_engine_client
+                            session_factory = app.state.database_session_factory
+                            if not ml_client or not session_factory:
+                                continue
+
+                            request_id = f"camera-poll-{uuid.uuid4()}"
+                            events = await ml_client.fetch_camera_events(request_id=request_id, limit=100)
+                            if not events:
+                                continue
+
+                            async with session_factory() as session:
+                                service = RecognitionService(session=session, ml_client=ml_client)
+                                await service.persist_camera_events(events=events, request_id=request_id)
+
+                        except asyncio.CancelledError:
+                            logger.info("Camera events polling task cancelled.")
+                            break
+                        except Exception as e:
+                            logger.error(f"Error in camera events polling loop: {e}")
+
+                polling_task = asyncio.create_task(_poll_camera_events_loop())
+
                 yield
             finally:
+                if polling_task:
+                    polling_task.cancel()
+                    try:
+                        await polling_task
+                    except asyncio.CancelledError:
+                        pass
+
                 app.state.ml_engine_client = None
                 app.state.database_engine = None
                 app.state.database_session_factory = None
