@@ -23,6 +23,7 @@ from api.schemas import (
     RecognitionResponse,
     FaceResult,
     ErrorResponse,
+    CameraEventSchema,
 )
 from camera.factory import create_camera
 from camera.session import CameraSession
@@ -355,6 +356,31 @@ def create_app(runtime_factory: Callable[..., MLRuntime] = initialize_runtime) -
                 "last_error": None
             }
         return runtime.camera_session.status()
+
+    @app.get("/internal/v1/camera/events", response_model=List[CameraEventSchema])
+    async def camera_events(
+        limit: int = 100,
+        runtime: MLRuntime = Depends(require_ready_runtime)
+    ):
+        if not runtime.camera_session:
+            return []
+
+        limit = max(1, min(limit, 1000))
+        events = runtime.camera_session.get_events(limit=limit)
+
+        return [
+            CameraEventSchema(
+                person_id=e.person_id,
+                recognition_status=e.recognition_status,
+                similarity=e.similarity,
+                threshold=e.threshold,
+                detection_confidence=e.detection_confidence,
+                bbox=e.bbox,
+                matched_embedding_id=e.matched_embedding_id,
+                timestamp=e.timestamp,
+            )
+            for e in events
+        ]
 
     return app
 

@@ -42,6 +42,16 @@ class RecognitionResponse(BaseModel):
     processing_time_ms: float
     faces: List[FaceResult]
 
+class CameraEventSchema(BaseModel):
+    person_id: Optional[str]
+    recognition_status: RecognitionStatus
+    similarity: float = Field(..., ge=-1.0, le=1.0)
+    threshold: float = Field(..., ge=-1.0, le=1.0)
+    detection_confidence: float = Field(..., ge=0.0, le=1.0)
+    bbox: List[int] = Field(..., min_length=4, max_length=4)
+    matched_embedding_id: Optional[str] = None
+    timestamp: str
+
 class ErrorDetail(BaseModel):
     code: str
     message: str
