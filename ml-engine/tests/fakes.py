@@ -130,7 +130,10 @@ class FakeCamera(BaseCamera):
         self._read_count = 0
 
     def read_frame(self) -> Optional[np.ndarray]:
-        if not self._opened or self._read_count >= self._max_reads:
+        if not self._opened:
+            return None
+        if self._read_count >= self._max_reads:
+            self._opened = False # Simulate stream end to immediately stop CameraSession loop
             return None
         frame = self._frames[self._index % len(self._frames)]
         self._index += 1

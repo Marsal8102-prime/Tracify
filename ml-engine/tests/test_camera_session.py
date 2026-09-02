@@ -3,9 +3,18 @@ import numpy as np
 import threading
 import time
 
+from unittest.mock import patch
+import itertools
+
 from camera.session import CameraSession, CameraSessionState
 from camera.events import CameraEvent
 from tests.fakes import FakeCamera, FakePreprocessor, FakeDetector, FakeAligner, FakeEmbedder, FakeRecognizer
+
+@pytest.fixture(autouse=True)
+def mock_monotonic():
+    counter = itertools.count(start=0.0, step=0.1)
+    with patch("camera.session.time.monotonic", side_effect=counter) as mock_m:
+        yield mock_m
 
 @pytest.fixture
 def fake_components():
@@ -77,7 +86,8 @@ def test_processes_frames_and_produces_events(fake_components):
     session.start()
     
     # Wait for the thread to process frames and end naturally when camera hits max_reads
-    time.sleep(0.5)
+    if session._thread:
+        session._thread.join(timeout=5.0)
     
     assert session.frames_processed == 3
     assert session.events_buffered == 3
@@ -92,7 +102,8 @@ def test_no_faces_detected_produces_no_events(fake_components):
     session = CameraSession(camera=camera, **comps)
 
     session.start()
-    time.sleep(0.5)
+    if session._thread:
+        session._thread.join(timeout=5.0)
     
     assert session.frames_processed == 3
     assert session.events_buffered == 0
@@ -111,7 +122,8 @@ def test_alignment_returns_none_skips_face(fake_components):
     session = CameraSession(camera=camera, **comps)
 
     session.start()
-    time.sleep(0.5)
+    if session._thread:
+        session._thread.join(timeout=5.0)
     
     assert session.frames_processed == 1
     assert session.events_buffered == 0
@@ -122,7 +134,8 @@ def test_event_buffer_append_and_drain(fake_components):
     session = CameraSession(camera=camera, **fake_components)
     
     session.start()
-    time.sleep(0.5)
+    if session._thread:
+        session._thread.join(timeout=5.0)
     
     assert session.events_buffered == 5
     events = session.get_events()
@@ -135,7 +148,8 @@ def test_event_buffer_bounded(fake_components):
     session = CameraSession(camera=camera, buffer_size=3, **fake_components)
     
     session.start()
-    time.sleep(0.5)
+    if session._thread:
+        session._thread.join(timeout=5.0)
     
     assert session.events_buffered == 3 # Should be capped at 3
     assert session.status()["events_dropped"] == 7
@@ -146,7 +160,8 @@ def test_event_buffer_drain_with_limit(fake_components):
     session = CameraSession(camera=camera, **fake_components)
     
     session.start()
-    time.sleep(0.5)
+    if session._thread:
+        session._thread.join(timeout=5.0)
     
     events = session.get_events(limit=2)
     assert len(events) == 2
@@ -158,7 +173,8 @@ def test_event_fields(fake_components):
     session = CameraSession(camera=camera, **fake_components)
     
     session.start()
-    time.sleep(0.5)
+    if session._thread:
+        session._thread.join(timeout=5.0)
     
     events = session.get_events()
     assert len(events) == 1
@@ -187,7 +203,8 @@ def test_consecutive_error_limit(fake_components):
     session = CameraSession(camera=camera, **comps)
     session.start()
     
-    time.sleep(0.5)
+    if session._thread:
+        session._thread.join(timeout=5.0)
     
     assert session.state == CameraSessionState.STOPPED
     assert session.status()["last_error"] == "Too many consecutive processing errors"
@@ -224,10 +241,29 @@ def test_status_after_stop(fake_components):
     session = CameraSession(camera=camera, **fake_components)
     
     session.start()
-    time.sleep(0.5)
+    if session._thread:
+        session._thread.join(timeout=5.0)
     session.stop()
     
     status = session.status()
     assert status["state"] == "stopped"
     assert status["frames_processed"] == 5
     assert status["events_produced"] == 5
+
+def test_rate_limiting_skips_frames(fake_components):
+    # Mock time advances by 0.1s on each call to time.monotonic()
+    # Target FPS is 1.0 (interval = 1.0s).
+    camera = FakeCamera(max_reads=20)
+    session = CameraSession(camera=camera, target_fps=1.0, **fake_components)
+    session.start()
+    if session._thread:
+        session._thread.join(timeout=5.0)
+    session.stop()
+    status = session.status()
+    # Frame 1: processed (next=1.0).
+    # Frames 2-10: skipped (now < 1.0).
+    # Frame 11 (or 12 due to floats): processed (now=1.1 or 1.0).
+    # Frame 20: processed (now=2.0).
+    # Total processed: 3.
+    assert status["frames_processed"] == 3
+    assert status["events_produced"] == 3
