@@ -36,6 +36,7 @@ class CameraSession:
         pipeline_lock: threading.Lock,
         buffer_size: int = 1000,
         target_fps: float = 15.0,
+        event_cooldown_seconds: float = 5.0,
     ) -> None:
         self._camera = camera
         self._preprocessor = preprocessor
@@ -45,6 +46,7 @@ class CameraSession:
         self._recognizer = recognizer
         self._pipeline_lock = pipeline_lock
         self._target_fps = target_fps
+        self._event_cooldown_seconds = event_cooldown_seconds
         
         self._event_buffer = EventBuffer(maxlen=buffer_size)
         self._state = CameraSessionState.STOPPED
@@ -54,6 +56,7 @@ class CameraSession:
         self._frames_processed = 0
         self._consecutive_errors = 0
         self._last_error: Optional[str] = None
+        self._last_event_times: dict[str, float] = {}
 
     @property
     def state(self) -> CameraSessionState:
@@ -83,6 +86,7 @@ class CameraSession:
         self._last_error = None
         self._frames_processed = 0
         self._consecutive_errors = 0
+        self._last_event_times.clear()
 
         try:
             self._camera.open()
@@ -131,6 +135,23 @@ class CameraSession:
             "events_dropped": self._event_buffer.total_dropped,
             "last_error": self._last_error,
         }
+
+    def _should_emit_event(self, event: CameraEvent, now: float) -> bool:
+        """Determine whether a CameraEvent should be emitted to the buffer.
+
+        Known-person events (recognition_status == "known" and person_id is
+        not None) are suppressed if the same person_id was emitted within the
+        cooldown period. All other events are always emitted.
+        """
+        if event.person_id is None or event.recognition_status != "known":
+            return True
+
+        last_time = self._last_event_times.get(event.person_id)
+        if last_time is None or (now - last_time) >= self._event_cooldown_seconds:
+            self._last_event_times[event.person_id] = now
+            return True
+
+        return False
 
     def _process_frame(self, frame: np.ndarray) -> List[CameraEvent]:
         """Process a single frame. Returns a list of CameraEvents."""
@@ -205,8 +226,10 @@ class CameraSession:
 
             try:
                 events = self._process_frame(frame)
+                now_emit = time.monotonic()
                 for event in events:
-                    self._event_buffer.append(event)
+                    if self._should_emit_event(event, now_emit):
+                        self._event_buffer.append(event)
             except Exception:
                 logger.warning("Frame processing error", exc_info=True)
                 self._consecutive_errors += 1

@@ -320,6 +320,7 @@ def create_app(runtime_factory: Callable[..., MLRuntime] = initialize_runtime) -
             recognizer=runtime.recognizer,
             pipeline_lock=runtime.pipeline_lock,
             target_fps=runtime.settings.camera.fps,
+            event_cooldown_seconds=runtime.settings.camera.event_cooldown_seconds,
         )
 
         try:

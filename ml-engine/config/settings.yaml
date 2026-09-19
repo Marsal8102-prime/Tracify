@@ -16,6 +16,8 @@ camera:
   height: 720
   # Target FPS for processing (frames are skipped to match this rate)
   fps: 15
+  # Cooldown (seconds) before re-emitting a camera event for the same known person
+  event_cooldown_seconds: 5
   # RTSP-specific: seconds before reconnect attempt on stream drop
   reconnect_delay: 2.0
   # RTSP-specific: max consecutive reconnect attempts (0 = unlimited)
