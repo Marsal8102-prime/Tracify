@@ -37,6 +37,7 @@ class CameraSettings:
     width: int = 1280
     height: int = 720
     fps: int = 15
+    event_cooldown_seconds: float = 5.0
     reconnect_delay: float = 2.0
     max_reconnect_attempts: int = 10
 
